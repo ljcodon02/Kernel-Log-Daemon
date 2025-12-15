@@ -21,6 +21,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "proc.h"
+#include "klog.h"
 
 #define BACKSPACE 0x100  // erase the last output character
 #define C(x)  ((x)-'@')  // Control-x
@@ -36,6 +37,19 @@ consputc(int c)
 {
   if(c == BACKSPACE){
     // if the user typed backspace, overwrite with a space.
+    uartputc_sync('\b'); uartputc_sync(' '); uartputc_sync('\b');
+  } else {
+    uartputc_sync(c);
+    klog_putc(c);
+  }
+}
+
+// Like consputc(), but does not feed characters into klog.
+// Used for echoing user input so klog only contains kernel output.
+static void
+consputc_nolog(int c)
+{
+  if(c == BACKSPACE){
     uartputc_sync('\b'); uartputc_sync(' '); uartputc_sync('\b');
   } else {
     uartputc_sync(c);
@@ -151,14 +165,14 @@ consoleintr(int c)
     while(cons.e != cons.w &&
           cons.buf[(cons.e-1) % INPUT_BUF_SIZE] != '\n'){
       cons.e--;
-      consputc(BACKSPACE);
+      consputc_nolog(BACKSPACE);
     }
     break;
   case C('H'): // Backspace
   case '\x7f': // Delete key
     if(cons.e != cons.w){
       cons.e--;
-      consputc(BACKSPACE);
+      consputc_nolog(BACKSPACE);
     }
     break;
   default:
@@ -166,7 +180,7 @@ consoleintr(int c)
       c = (c == '\r') ? '\n' : c;
 
       // echo back to the user.
-      consputc(c);
+      consputc_nolog(c);
 
       // store for consumption by consoleread().
       cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;

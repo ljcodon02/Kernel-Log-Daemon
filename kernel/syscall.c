@@ -101,6 +101,8 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_klogread(void);
+extern uint64 sys_klogclear(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -126,6 +128,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_klogread] sys_klogread,
+[SYS_klogclear] sys_klogclear,
 };
 
 void
@@ -136,8 +140,32 @@ syscall(void)
 
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    // Use num to lookup the system call function for num, call it,
-    // and store its return value in p->trapframe->a0
+    
+    // --- BỘ LỌC LOG (UPDATED) ---
+    // 1. Kiểm tra tên tiến trình. Nếu là "klogd" thì bỏ qua luôn.
+    // Dùng cách so sánh thủ công này an toàn hơn strncmp trong kernel.
+    int is_klogd = 0;
+    if(p->name[0] == 'k' && p->name[1] == 'l' && p->name[2] == 'o' && 
+       p->name[3] == 'g' && p->name[4] == 'd') {
+       is_klogd = 1;
+    }
+
+    // 2. Chỉ ghi log nếu KHÔNG phải klogd
+    if(is_klogd == 0) {
+        // 3. Chặn các syscall "ồn ào" để demo đẹp:
+        // - SYS_read, SYS_write, SYS_klogread: Hoạt động cơ bản.
+        // - SYS_pause: Để klogd ngủ mà không spam.
+        // - SYS_open, SYS_fstat, SYS_close: Để lệnh 'ls' gọn gàng.
+        if(num != SYS_read && num != SYS_write && num != SYS_klogread &&
+           num != SYS_pause &&
+           num != SYS_open && num != SYS_fstat && num != SYS_close) {
+             
+             // Dùng klog_printf để chỉ ghi vào buffer, không in ra màn hình ngay
+             klog_printf("[SYSCALL] PID %d (%s) goi syscall so %d\n", p->pid, p->name, num);
+        }
+    }
+    // ----------------------------
+
     p->trapframe->a0 = syscalls[num]();
   } else {
     printf("%d %s: unknown sys call %d\n",

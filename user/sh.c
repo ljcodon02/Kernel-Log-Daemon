@@ -76,8 +76,13 @@ runcmd(struct cmd *cmd)
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit(1);
-    exec(ecmd->argv[0], ecmd->argv);
-    fprintf(2, "exec %s failed\n", ecmd->argv[0]);
+    if(exec(ecmd->argv[0], ecmd->argv) < 0){
+      // Programs are stored in the xv6 filesystem without the leading '_'
+      // from their host-side build artifact names (e.g., user/_klogd -> klogd).
+      if(ecmd->argv[0][0] == '_')
+        exec(ecmd->argv[0] + 1, ecmd->argv);
+      fprintf(2, "exec %s failed\n", ecmd->argv[0]);
+    }
     break;
 
   case REDIR:

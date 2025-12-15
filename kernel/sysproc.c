@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "vm.h"
+#include "klog.h"
 
 uint64
 sys_exit(void)
@@ -106,4 +107,24 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// Read from kernel log buffer
+uint64
+sys_klogread(void)
+{
+  uint64 addr;
+  int n;
+  
+  argaddr(0, &addr);
+  argint(1, &n);
+  
+  return klog_read_to_user(1, addr, n);
+}
+
+uint64
+sys_klogclear(void)
+{
+  klogclear();
+  return 0;
 }
